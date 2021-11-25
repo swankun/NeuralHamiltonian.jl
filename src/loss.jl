@@ -11,9 +11,8 @@ function SetDistanceLoss(f::Function,xstar,r)
     SetDistanceLoss{eltype(xstar),typeof(f)}(xstar,r,f)
 end
 function (l::SetDistanceLoss)(x::Matrix)
-    # delta = minimum(map(l.f, eachcol(x)))
-    # return delta < l.radius ? zero(eltype(x)) : delta - l.radius
-    sum(abs2, x)
+    delta = minimum(map(l.f, eachcol(x)))
+    return delta < l.radius ? zero(eltype(x)) : delta - l.radius
 end
 
 function gradient(l::NeuralPBCLoss, rollout::TrajectoryRollout, x0, θ)
