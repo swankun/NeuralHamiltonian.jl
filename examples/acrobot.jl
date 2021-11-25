@@ -1,4 +1,5 @@
 using MLBasedESC
+import MLBasedESC: Flux
 using NeuralHamiltonian
 using OrdinaryDiffEq
 
@@ -14,7 +15,7 @@ function dynamics(policy::Function)
     I2  = 0.405*0.177^2 + 0.01497763008
     b1  = 0.001
     b2  = 0.005
-    ϵ = 0.01
+    ϵ = 0.05
     function f!(dx, x, ps, t)
         cq1, sq1, q1dot, cq2, sq2, q2dot = x
         sq1q2 = sq1*cq2 + cq1*sq2
@@ -40,26 +41,73 @@ function outmap(x::Matrix)
     q2 = map(y->atan(y[5],y[4]), eachcol(x))
     q1dot = view(x, 3, :)
     q2dot = view(x, 6, :)
-    q1revs = cumsum( -round.(Int, [0 diff(q1,dims=2)]/pi), dims=2 )
-    q2revs = cumsum( -round.(Int, [0 diff(q2,dims=2)]/pi), dims=2 )
+    q1revs = cumsum( -round.(Int, [0; diff(q1)]/pi) )
+    q2revs = cumsum( -round.(Int, [0; diff(q2)]/pi) )
     q1 = q1 .+ q1revs*pi
     q2 = q2 .+ q2revs*pi
-    return [q1; q2; q1dot'; q2dot']
+    return [q1 q2 q1dot q2dot] |> transpose
 end
 distance(x) = begin
     +(
         4*2(1+x[1]),
         2*2(1-x[4]),
         2*x[3]^2,
-        0.25*x[4]^2
+        1*x[4]^2
     )
 end
 
+## Problem setup
 Hd = NeuralNetwork(Float64, [6,16,48,1])
 pbc = NeuralPBCProblem{true}(6, Hd, dynamics);
+predict = TrajectoryRollout(pbc, tf=3.0, umax=1.0);
+
+## Rollout
 x0 = inmap([3.,0,0,0])
 # predict(pbc, x0, pbc.θ)
-predict = TrajectoryRollout(pbc, tf=3.0, umax=3.0);
-l1 = SetDistanceLoss(distance, inmap(zeros(4)), 0.01)
+
+## Loss
+xdesired = inmap(zeros(4))
+radius = 0.01
+l1 = SetDistanceLoss(distance, xdesired, radius)
 # l1(rand(6), pbc.θ)
 # gradient(l1, predict, x0, pbc.θ)
+
+## Minibatch
+function batch(x0s,ps)
+    N = length(x0s)
+    gs = [zeros(length(ps)) for _=1:N]
+    ls = zeros(N)
+    Threads.@threads for i=1:N
+        lossgrad, lossval = gradient(l1,predict,x0s[i],ps)
+        ls[i] = lossval
+        gs[i][:] = lossgrad
+    end
+    sum(gs)/N, sum(ls)/N
+end
+
+## Sampler
+function newsample()
+    q1 = rand([-1,1])*pi + 0.5*( rand()-0.5 )
+    q2 = 0.5*( rand()-0.5 )
+    q1dot = 0*( rand()-0.5 )
+    q2dot = 0*( rand()-0.5 )
+    return inmap([q1,q2,q1dot,q2dot])
+end
+
+## Training loop
+function train!(θ)
+    optimizer = Flux.ADAM()
+    epoch = 0
+    while epoch < 1000
+        x0s = [newsample() for _=1:8];
+        gs, ls = batch(x0s,θ)
+        Flux.Optimise.update!(optimizer,θ,gs)
+        @info "Loss is $ls"
+        epoch += 1
+    end
+end
+# ps = deepcopy(pbc.θ);
+# train!(ps)
+
+evaluate = transpose ∘ outmap ∘ Array
+# evaluate(predict(x0,ps,tf=10.0,dt=0.01))

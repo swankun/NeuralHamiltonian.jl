@@ -14,10 +14,10 @@ function TrajectoryRollout(pbc::NeuralPBCProblem{iip,T}; tf, umax=Inf) where {ii
     ode = ODEProblem{iip}(closedloop, zeros(pbc.N), tspan, pbc.θ)
     TrajectoryRollout{typeof(pbc),typeof(ode)}(pbc, ode, umax, tf)
 end
-function (l::TrajectoryRollout)(x0, θ)
-    solve(remake(l.ode, u0=x0), Tsit5(); p=θ, 
+function (l::TrajectoryRollout)(x0, θ; tf=l.horizon, dt=0.1)
+    solve(remake(l.ode, u0=x0, tspan=(0.0,tf)), Tsit5(); p=θ, 
         rtol=1e-6, atol=1e-6,
-        saveat=0.1, 
+        saveat=dt, 
         sensealg=InterpolatingAdjoint()
     )
 end

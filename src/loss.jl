@@ -17,7 +17,8 @@ end
 
 function gradient(l::NeuralPBCLoss, rollout::TrajectoryRollout, x0, θ)
     loss(ps) = l( Array(rollout(x0,ps)) )
-    Zygote.gradient(loss, θ)[1]
+    val, back = Zygote.pullback(loss, θ)
+    return first(back(1)), val
 end
 
 function gradient(ls::Tuple{Vararg{L}}, rollout::TrajectoryRollout, x0, θ) where {L<:NeuralPBCLoss}
@@ -25,5 +26,6 @@ function gradient(ls::Tuple{Vararg{L}}, rollout::TrajectoryRollout, x0, θ) wher
         x = Array(rollout(x0,ps))
         sum(l(x) for l in ls)
     end
-    Zygote.gradient(loss, θ)[1]
+    val, back = Zygote.pullback(loss, θ)
+    return first(back(1)), val
 end
