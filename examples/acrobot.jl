@@ -19,13 +19,21 @@ function dynamics(policy::ParametricPolicy)
     function f!(dx, x, ps, t)
         cq1, sq1, q1dot, cq2, sq2, q2dot = x
         sq1q2 = sq1*cq2 + cq1*sq2
+        q1_circ = sq1^2 + cq1^2 - 1
+        q2_circ = sq2^2 + cq2^2 - 1
         effort = policy(x,ps)
-        dx[1] = -sq1*q1dot - ϵ*cq1*(sq1^2 + cq1^2 - 1)
-        dx[2] = cq1*q1dot - ϵ*sq1*(sq1^2 + cq1^2 - 1)
-        dx[3] = (-I2*(b1*q1dot + g*lc1*m1*sq1 + g*m2*(l1*sq1 + lc2*sq1q2) - 2*l1*lc2*m2*q1dot*q2dot*sq2 - l1*lc2*m2*q2dot^2*sq2) + (I2 + l1*lc2*m2*cq2)*(b2*q2dot + g*lc2*m2*sq1q2 + l1*lc2*m2*q1dot^2*sq2 - effort))/(I1*I2 + I2*l1^2*m2 - l1^2*lc2^2*m2^2*cq2^2)
-        dx[4] = -sq2*q2dot - ϵ*cq2*(sq2^2 + cq2^2 - 1)
-        dx[5] = cq2*q2dot - ϵ*sq2*(sq2^2 + cq2^2 - 1)
-        dx[6] = ((I2 + l1*lc2*m2*cq2)*(b1*q1dot + g*lc1*m1*sq1 + g*m2*(l1*sq1 + lc2*sq1q2) - 2*l1*lc2*m2*q1dot*q2dot*sq2 - l1*lc2*m2*q2dot^2*sq2) - (I1 + I2 + l1^2*m2 + 2*l1*lc2*m2*cq2)*(b2*q2dot + g*lc2*m2*sq1q2 + l1*lc2*m2*q1dot^2*sq2 - effort))/(I1*I2 + I2*l1^2*m2 - l1^2*lc2^2*m2^2*cq2^2)
+        ℓ0 = l1*lc2*m2*sq2
+        ℓ1 = l1*lc2*m2*cq2
+        ξ1 = b1*q1dot + g*lc1*m1*sq1 + g*m2*(l1*sq1 + lc2*sq1q2) - 
+                2*ℓ0*q1dot*q2dot - ℓ0*q2dot^2
+        ξ2 = b2*q2dot + g*lc2*m2*sq1q2 + ℓ0*q1dot^2 - effort
+        ξ3 = I1*I2 + I2*l1^2*m2 - l1^2*lc2^2*m2^2*cq2^2
+        dx[1] = -sq1*q1dot - ϵ*cq1*q1_circ
+        dx[2] = cq1*q1dot - ϵ*sq1*q1_circ
+        dx[3] = (-I2*ξ1 + (I2 + ℓ1)*ξ2)/ξ3
+        dx[4] = -sq2*q2dot - ϵ*cq2*q2_circ
+        dx[5] = cq2*q2dot - ϵ*sq2*q2_circ
+        dx[6] = ((I2 + ℓ1)*ξ1 - (I1 + I2 + l1^2*m2 + 2*ℓ1)*ξ2)/ξ3
         nothing
     end
 end
@@ -62,18 +70,18 @@ pbc = NeuralPBCProblem{true}(6, Hd, dynamics);
 
 ## Controller setup
 umax = 1.0
-xdesired = inmap(zeros(4))
-controller = NeuralPBCPolicy(pbc,umax,xdesired);
+controller = NeuralPBCPolicy(pbc,umax);
 
 ## Rollout
 predict = TrajectoryRollout(pbc, controller, tf=3.0);
 x0 = inmap([3.,0,0,0])
-# predict(x0, pbc.θ)
+# evolution = Array(predict(x0, pbc.θ))
 
 ## Loss
 radius = 0.01
+xdesired = inmap(zeros(4))
 l1 = SetDistanceLoss(distance, xdesired, radius)
-# l1(rand(6,10))
+# l1(evolution)
 # gradient(l1, predict, x0, pbc.θ)
 
 ## Minibatch
@@ -98,7 +106,7 @@ function newsample()
     return inmap([q1,q2,q1dot,q2dot])
 end
 
-## Training loop
+## raining loop
 function train!(θ)
     optimizer = Flux.ADAM()
     epoch = 0

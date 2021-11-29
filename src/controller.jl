@@ -1,15 +1,15 @@
-export ParametricPolicy, NeuralPBCPolicy
+export ParametricPolicy, NeuralPBCPolicy, LinearPolicy
 
 abstract type ParametricPolicy end
 
 struct NeuralPBCPolicy{TP,T} <: ParametricPolicy
     prob::TP
-    xstar::Vector{T}
     umax::T
 end
 
-function NeuralPBCPolicy(prob::NeuralPBCProblem, umax, xstar)
-    NeuralPBCPolicy{typeof(prob),eltype(xstar)}(prob,xstar,umax)
+function NeuralPBCPolicy(prob::NeuralPBCProblem, umax)
+    T = precisionof(prob)
+    NeuralPBCPolicy{typeof(prob),T}(prob,T(umax))
 end
 function (pbc::NeuralPBCPolicy)(x,ps)
     θ = getindex(ps, pbc.prob.ps_index[:net])
@@ -21,9 +21,12 @@ end
 struct LinearPolicy{T} <: ParametricPolicy
     N::Int
     gains::Vector{T}
+    umax::T
+end
+function (policy::LinearPolicy)(x,ps=nothing)
+    @assert length(x) === policy.N
+    K = policy.gains
+    effort = -dot(K, x) 
+    return clamp(effort, -policy.umax, policy.umax)
 end
 
-struct SwitchingPolicy{SW,ST} <: ParametricPolicy
-    swing_policy::SW
-    lin_policy::ST
-end

@@ -1,4 +1,4 @@
-export NeuralPBCProblem, controller, predict
+export NeuralPBCProblem, controller, predict, precisionof
 
 struct NeuralPBCProblem{iip,T,HD,F1}
     N::Int
@@ -36,12 +36,4 @@ function Base.getproperty(p::NeuralPBCProblem, sym::Symbol)
     end
 end
 
-function controller(p::NeuralPBCProblem, umax=Inf)
-    Hd = p.ham
-    u(x, ps) = begin
-        θ = getindex(ps, p.ps_index[:net])
-        K = getindex(ps, p.ps_index[:gains])
-        effort = dot(K, gradient(Hd, x, θ)) 
-        return clamp(effort, -umax, umax)
-    end
-end
+precisionof(::NeuralPBCProblem{iip,T}) where{iip,T} = T
