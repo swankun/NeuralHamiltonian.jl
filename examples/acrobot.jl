@@ -3,7 +3,7 @@ import MLBasedESC: Flux
 using NeuralHamiltonian
 using OrdinaryDiffEq
 
-function dynamics(policy::Function)
+function dynamics(policy::ParametricPolicy)
     g   = 9.81
     m1  = 2.7012465523580262
     m2  = 0.405
@@ -59,17 +59,21 @@ end
 ## Problem setup
 Hd = NeuralNetwork(Float64, [6,16,48,1])
 pbc = NeuralPBCProblem{true}(6, Hd, dynamics);
-predict = TrajectoryRollout(pbc, tf=3.0, umax=1.0);
+
+## Controller setup
+umax = 1.0
+xdesired = inmap(zeros(4))
+controller = NeuralPBCPolicy(pbc,umax,xdesired);
 
 ## Rollout
+predict = TrajectoryRollout(pbc, controller, tf=3.0);
 x0 = inmap([3.,0,0,0])
-# predict(pbc, x0, pbc.θ)
+# predict(x0, pbc.θ)
 
 ## Loss
-xdesired = inmap(zeros(4))
 radius = 0.01
 l1 = SetDistanceLoss(distance, xdesired, radius)
-# l1(rand(6), pbc.θ)
+# l1(rand(6,10))
 # gradient(l1, predict, x0, pbc.θ)
 
 ## Minibatch

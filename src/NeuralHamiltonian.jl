@@ -10,6 +10,7 @@ using OrdinaryDiffEq, DiffEqSensitivity
 import MLBasedESC: ReverseDiff, Zygote, NeuralNetwork, gradient
 
 include("pbc.jl")
+include("controller.jl")
 include("rollout.jl")
 include("loss.jl")
 include("systems/abstractsys.jl")
