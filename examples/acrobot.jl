@@ -60,7 +60,7 @@ distance(x) = begin
         4*2(1+x[1]),
         2*2(1-x[4]),
         2*x[3]^2,
-        1*x[4]^2
+        1*x[6]^2
     )
 end
 
@@ -79,7 +79,7 @@ x0 = inmap([3.,0,0,0])
 
 ## Loss
 radius = 0.01
-xdesired = inmap(zeros(4))
+xdesired = inmap([π,0,0,0])
 l1 = SetDistanceLoss(distance, xdesired, radius)
 # l1(evolution)
 # gradient(l1, predict, x0, pbc.θ)
@@ -91,6 +91,7 @@ function batch(x0s,ps)
     ls = zeros(N)
     Threads.@threads for i=1:N
         lossgrad, lossval = gradient(l1,predict,x0s[i],ps)
+        isnothing(lossgrad) && continue
         ls[i] = lossval
         gs[i][:] = lossgrad
     end
